@@ -4,12 +4,13 @@ declare(strict_types=1);
 
 namespace NestboxPHP\Macaw;
 
+use Couchbase\IndexFailureException;
 use NestboxPHP\Macaw\Exception\MacawException;
 use NestboxPHP\Nestbox\Nestbox;
 
 class Macaw extends Nestbox
 {
-    final protected const string PACKAGE_NAME = 'macaw';
+    final protected const PACKAGE_NAME = 'macaw';
 
     public int $macawStaleHoursNews = 1;
     public int $macawStaleHoursTitleData = 1;
@@ -79,10 +80,12 @@ class Macaw extends Nestbox
         $sql = "CREATE TABLE IF NOT EXISTS `macaw_title_news` (
                     `news_id` VARCHAR( 36 ) NOT NULL , -- uuid v4
                     `timestamp` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ,
-                    `title` VARCHAR( 10240 ) , -- maximum 10kb
-                    `body` VARCHAR( 10240 ) , -- maximum 10kb
+                    `title` TEXT , -- maximum 10kb playfab content
+                    `body` TEXT , -- maximum 10kb playfab content
                     PRIMARY KEY ( `news_id` )
                 ) ENGINE = InnoDB DEFAULT CHARSET=UTF8MB4 COLLATE=utf8mb4_general_ci;";
+        var_dump("creating table `macaw_title_news`");
+        return $this->query_execute($sql);
     }
 
 
@@ -242,6 +245,31 @@ class Macaw extends Nestbox
         }
 
         return intval($this->fetch_first_result()["calls_per_second"]);
+    }
+
+
+
+    public function last_endpoint_call(string $endpoint): string
+    {
+        $sql = "SELECT `call_time` FROM `macaw_api_calls`
+               WHERE `call_endpoint` LIKE :call_endpoint
+               ORDER BY `call_time` DESC LIMIT 1;";
+        if (!$this->query_execute($sql, ["call_endpoint" => "$endpoint%"])) return "";
+        if (!$results = $this->fetch_first_result()) return "";
+        return $results["call_time"];
+    }
+
+
+    public function hours_since_last_api_call_to_endpoint(string $endpoint): int
+    {
+        $sql = "SELECT TIMESTAMPDIFF(HOUR, `call_time`, NOW()) AS 'hours_since_last_call' FROM `macaw_api_calls`
+                WHERE `call_endpoint` LIKE :call_endpoint 
+                ORDER BY `hours_since_last_call` ASC LIMIT 1;";
+        if (!$this->query_execute($sql, ["call_endpoint" => "$endpoint%"])) return 0;
+
+        $results = $this->fetch_first_result();
+        if (!$results) return 0;
+        return $results["hours_since_last_call"];
     }
 
 
@@ -1550,6 +1578,8 @@ class Macaw extends Nestbox
     {
         $postFields = ["Count" => $count];
 
+        $hoursSinceLastCall = $this->hours_since_last_api_call_to_endpoint("/Client/GetTitleNews");
+
         $data = $this->make_rest_call(endpoint: "https://$this->titleId.playfabapi.com/Client/GetTitleNews",
             postFields: $postFields);
 
@@ -1560,12 +1590,12 @@ class Macaw extends Nestbox
             $rowData[] = [
                 "news_id" => $news["NewsId"],
                 "timestamp" => trim(preg_replace("/[TZ]/i", " ", $news["Timestamp"])),
-                "news_title" => $news["NewsTitle"],
-                "news_body" => $news["Body"]
+                "title" => $news["Title"],
+                "body" => $news["Body"]
             ];
         }
 
-        if ($rowData && !$this->insert("macaw_title_news", $rowData)) return [];
+        if (!$rowData && !$this->insert("macaw_title_news", $rowData)) return [];
 
         return $rowData;
     }
