@@ -57,19 +57,32 @@ class Macaw extends Nestbox
      *
      * @return bool
      */
-    public function create_class_table_macaw_api_log(): bool
+    public function create_class_table_macaw_api_calls(): bool
     {
-        if ($this->valid_schema("macaw_api_log")) return true;
+        if ($this->valid_schema("macaw_api_calls")) return true;
 
         $sql = "CREATE TABLE IF NOT EXISTS `macaw_api_calls` (
-            `call_id` INT NOT NULL AUTO_INCREMENT ,
-            `call_endpoint` VARCHAR( 64 ) NULL ,
-            `call_client` VARCHAR( 64 ) NULL ,
-            `call_time` DATETIME DEFAULT CURRENT_TIMESTAMP ,
-            `status_code` VARCHAR( 3 ) ,
-            PRIMARY KEY ( `call_id` )
-        ) ENGINE = InnoDB DEFAULT CHARSET=UTF8MB4 COLLATE=utf8mb4_general_ci;";
+                    `call_id` INT NOT NULL AUTO_INCREMENT ,
+                    `call_endpoint` VARCHAR( 64 ) NULL ,
+                    `call_client` VARCHAR( 64 ) NULL ,
+                    `call_time` DATETIME DEFAULT CURRENT_TIMESTAMP ,
+                    `status_code` VARCHAR( 3 ) ,
+                    PRIMARY KEY ( `call_id` )
+                ) ENGINE = InnoDB DEFAULT CHARSET=UTF8MB4 COLLATE=utf8mb4_general_ci;";
         return $this->query_execute($sql);
+    }
+
+
+    public function create_class_table_macaw_title_news(): bool
+    {
+        // At the time of development, title and body fields are limited to 10kb within PlayFab
+        $sql = "CREATE TABLE IF NOT EXISTS `macaw_title_news` (
+                    `news_id` VARCHAR( 36 ) NOT NULL , -- uuid v4
+                    `timestamp` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ,
+                    `title` VARCHAR( 10240 ) , -- maximum 10kb
+                    `body` VARCHAR( 10240 ) , -- maximum 10kb
+                    PRIMARY KEY ( `news_id` )
+                ) ENGINE = InnoDB DEFAULT CHARSET=UTF8MB4 COLLATE=utf8mb4_general_ci;";
     }
 
 
@@ -329,7 +342,7 @@ class Macaw extends Nestbox
             "TitleSharedSecret" => $titleSharedSecret
         ];
 
-        return $this->make_rest_call(endpoint: "https://titleId.playfabapi.com/Client/GetTitlePublicKey",
+        return $this->make_rest_call(endpoint: "https://$this->titleId.playfabapi.com/Client/GetTitlePublicKey",
             postFields: $postFields);
     }
 
@@ -351,7 +364,7 @@ class Macaw extends Nestbox
             "Password" => $password
         ];
 
-        return $this->make_rest_call(endpoint: "https://titleId.playfabapi.com/Client/RegisterPlayFabUser",
+        return $this->make_rest_call(endpoint: "https://$this->titleId.playfabapi.com/Client/RegisterPlayFabUser",
             postFields: $postFields, useSessionTicket: false);
     }
 
@@ -387,7 +400,7 @@ class Macaw extends Nestbox
         if ($customTags) $postFields["CustomTags"] = $customTags;
         if ($infoRequestParameters) $postFields["InfoRequestParameters"] = $infoRequestParameters;
 
-        $response = $this->make_rest_call(endpoint: "https://titleId.playfabapi.com/Client/LoginWithEmailAddress",
+        $response = $this->make_rest_call(endpoint: "https://$this->titleId.playfabapi.com/Client/LoginWithEmailAddress",
             postFields: $postFields, useSessionTicket: false);
 
         $_SESSION[$this->macawSessionKey]["data"] = $response["data"] ?? [];
@@ -439,7 +452,7 @@ class Macaw extends Nestbox
         if ($playerSecret) $postFields["PlayerSecret"] = $playerSecret;
         if ($serverAuthCode) $postFields["ServerAuthCode"] = $serverAuthCode;
 
-        $response = $this->make_rest_call(endpoint: "https://titleId.playfabapi.com/Client/LoginWithGoogleAccount",
+        $response = $this->make_rest_call(endpoint: "https://$this->titleId.playfabapi.com/Client/LoginWithGoogleAccount",
             postFields: $postFields, useSessionTicket: false);
 
         $_SESSION[$this->macawSessionKey]["data"] = $response["data"] ?? [];
@@ -479,7 +492,7 @@ class Macaw extends Nestbox
         if ($keys) $postFields["Keys"] = $keys;
         if ($playFabId) $postFields["PlayFabId"] = $playFabId;
 
-        return $this->make_rest_call(endpoint: "https://titleId.playfabapi.com/Client/GetCharacterData",
+        return $this->make_rest_call(endpoint: "https://$this->titleId.playfabapi.com/Client/GetCharacterData",
             postFields: $postFields);
     }
 
@@ -502,7 +515,7 @@ class Macaw extends Nestbox
         if ($keys) $postFields["Keys"] = $keys;
         if ($playFabId) $postFields["PlayFabId"] = $playFabId;
 
-        return $this->make_rest_call(endpoint: "https://titleId.playfabapi.com/Client/GetCharacterReadOnlyData",
+        return $this->make_rest_call(endpoint: "https://$this->titleId.playfabapi.com/Client/GetCharacterReadOnlyData",
             postFields: $postFields);
     }
 
@@ -532,7 +545,7 @@ class Macaw extends Nestbox
         if ($customTags) $postFields["CustomTags"] = $customTags;
         if ($keysToRemove) $postFields["KeysToRemove"] = $keysToRemove;
 
-        return $this->make_rest_call(endpoint: "https://titleId.playfabapi.com/Client/UpdateCharacterData",
+        return $this->make_rest_call(endpoint: "https://$this->titleId.playfabapi.com/Client/UpdateCharacterData",
             postFields: $postFields);
     }
 
@@ -558,7 +571,7 @@ class Macaw extends Nestbox
     public function get_all_users_characters(string $playFabId): array
     {
         $postFields = ["PlayFabId" => $playFabId];
-        return $this->make_rest_call(endpoint: "https://titleId.playfabapi.com/Client/GetAllUsersCharacters",
+        return $this->make_rest_call(endpoint: "https://$this->titleId.playfabapi.com/Client/GetAllUsersCharacters",
             postFields: $postFields);
     }
 
@@ -580,7 +593,7 @@ class Macaw extends Nestbox
             "MaxResultsCount" => max(10, min($maxResultsCount, 100))
         ];
 
-        return $this->make_rest_call(endpoint: "https://titleId.playfabapi.com/Client/GetCharacterLeaderboard",
+        return $this->make_rest_call(endpoint: "https://$this->titleId.playfabapi.com/Client/GetCharacterLeaderboard",
             postFields: $postFields);
     }
 
@@ -593,7 +606,7 @@ class Macaw extends Nestbox
     public function get_character_statistics(string $characterId): array
     {
         $postFields = ["CharacterId" => $characterId];
-        return $this->make_rest_call(endpoint: "https://titleId.playfabapi.com/Client/GetCharacterStatistics",
+        return $this->make_rest_call(endpoint: "https://$this->titleId.playfabapi.com/Client/GetCharacterStatistics",
             postFields: $postFields);
     }
 
@@ -615,7 +628,7 @@ class Macaw extends Nestbox
             "StatisticName" => $statisticName,
             "MaxResultsCount" => max(10, min($maxResultsCount, 100))
         ];
-        return $this->make_rest_call(endpoint: "https://titleId.playfabapi.com/Client/GetLeaderboardAroundCharacter",
+        return $this->make_rest_call(endpoint: "https://$this->titleId.playfabapi.com/Client/GetLeaderboardAroundCharacter",
             postFields: $postFields);
     }
 
@@ -628,7 +641,7 @@ class Macaw extends Nestbox
     public function get_leaderboard_for_user_characters(string $statisticName): array
     {
         $postFields = ["StatisticName" => $statisticName];
-        return $this->make_rest_call(endpoint: "https://titleId.playfabapi.com/Client/GetLeaderboardForUserCharacters",
+        return $this->make_rest_call(endpoint: "https://$this->titleId.playfabapi.com/Client/GetLeaderboardForUserCharacters",
             postFields: $postFields);
     }
 
@@ -653,7 +666,7 @@ class Macaw extends Nestbox
         ];
         if ($catalogVersion) $postFields["CatalogVersion"] = $catalogVersion;
         if ($customTags) $postFields["CustomTags"] = $customTags;
-        return $this->make_rest_call(endpoint: "https://titleId.playfabapi.com/Client/GrantCharacterToUser",
+        return $this->make_rest_call(endpoint: "https://$this->titleId.playfabapi.com/Client/GrantCharacterToUser",
             postFields: $postFields);
     }
 
@@ -675,7 +688,7 @@ class Macaw extends Nestbox
         $postFields = ["CharacterId" => $characterId];
         if ($characterStatistics) $postFields["CharacterStatistics"] = $characterStatistics;
         if ($customTags) $postFields["CustomTags"] = $customTags;
-        return $this->make_rest_call(endpoint: "https://titleId.playfabapi.com/Client/UpdateCharacterStatistics",
+        return $this->make_rest_call(endpoint: "https://$this->titleId.playfabapi.com/Client/UpdateCharacterStatistics",
             postFields: $postFields);
     }
 
@@ -715,7 +728,7 @@ class Macaw extends Nestbox
             "ThruCDN" => $thruCDN
         ];
 
-        return $this->make_rest_call(endpoint: "https://titleId.playfabapi.com/Client/GetContentDownloadUrl",
+        return $this->make_rest_call(endpoint: "https://$this->titleId.playfabapi.com/Client/GetContentDownloadUrl",
             postFields: $postFields);
     }
 
@@ -754,7 +767,7 @@ class Macaw extends Nestbox
         if ($titleDisplayName) $postFields["FriendTitleDisplayName"] = $titleDisplayName;
         if ($username) $postFields["FriendUsername"] = $username;
 
-        return $this->make_rest_call(endpoint: "https://titleId.playfabapi.com/Client/AddFriend",
+        return $this->make_rest_call(endpoint: "https://$this->titleId.playfabapi.com/Client/AddFriend",
             postFields: $postFields);
     }
 
@@ -784,7 +797,7 @@ class Macaw extends Nestbox
         if ($profileConstraints) $postFields["ProfileConstraints"] = $profileConstraints;
         if ($xboxToken) $postFields["XboxToken"] = $xboxToken;
 
-        return $this->make_rest_call(endpoint: "https://titleId.playfabapi.com/Client/GetFriendsList",
+        return $this->make_rest_call(endpoint: "https://$this->titleId.playfabapi.com/Client/GetFriendsList",
             postFields: $postFields);
     }
 
@@ -798,7 +811,7 @@ class Macaw extends Nestbox
     {
         $postFields = ["FriendPlayFabId" => $friendPlayFabId];
 
-        return $this->make_rest_call(endpoint: "https://titleId.playfabapi.com/Client/RemoveFriend",
+        return $this->make_rest_call(endpoint: "https://$this->titleId.playfabapi.com/Client/RemoveFriend",
             postFields: $postFields);
     }
 
@@ -816,7 +829,7 @@ class Macaw extends Nestbox
             "Tags" => $tags
         ];
 
-        return $this->make_rest_call(endpoint: "https://titleId.playfabapi.com/Client/SetFriendTags",
+        return $this->make_rest_call(endpoint: "https://$this->titleId.playfabapi.com/Client/SetFriendTags",
             postFields: $postFields);
     }
 
@@ -870,7 +883,7 @@ class Macaw extends Nestbox
         if ($version) $postFields["Version"] = $version;
         if ($xboxToken) $postFields["XboxToken"] = $xboxToken;
 
-        return $this->make_rest_call(endpoint: "https://titleId.playfabapi.com/Client/GetFriendLeaderboard",
+        return $this->make_rest_call(endpoint: "https://$this->titleId.playfabapi.com/Client/GetFriendLeaderboard",
             postFields: $postFields);
     }
 
@@ -913,7 +926,7 @@ class Macaw extends Nestbox
         if ($version) $postFields["Version"] = $version;
         if ($xboxToken) $postFields["XboxToken"] = $xboxToken;
 
-        return $this->make_rest_call(endpoint: "https://titleId.playfabapi.com/Client/GetFriendLeaderboardAroundPlayer",
+        return $this->make_rest_call(endpoint: "https://$this->titleId.playfabapi.com/Client/GetFriendLeaderboardAroundPlayer",
             postFields: $postFields);
     }
 
@@ -947,7 +960,7 @@ class Macaw extends Nestbox
         if ($useSpecificVersion) $postFields["UseSpecificVersion"] = $useSpecificVersion;
         if ($version) $postFields["Version"] = $version;
 
-        return $this->make_rest_call(endpoint: "https://titleId.playfabapi.com/Client/GetLeaderboard",
+        return $this->make_rest_call(endpoint: "https://$this->titleId.playfabapi.com/Client/GetLeaderboard",
             postFields: $postFields);
     }
 
@@ -984,7 +997,7 @@ class Macaw extends Nestbox
         if ($useSpecificVersion) $postFields["UseSpecificVersion"] = $useSpecificVersion;
         if ($version) $postFields["Version"] = $version;
 
-        return $this->make_rest_call(endpoint: "https://titleId.playfabapi.com/Client/GetLeaderboardAroundPlayer",
+        return $this->make_rest_call(endpoint: "https://$this->titleId.playfabapi.com/Client/GetLeaderboardAroundPlayer",
             postFields: $postFields);
     }
 
@@ -1001,7 +1014,7 @@ class Macaw extends Nestbox
         $postFields = ["StatisticName" => $statisticName];
         if ($customTags) $postFields["CustomTags"] = $customTags;
 
-        return $this->make_rest_call(endpoint: "https://titleId.playfabapi.com/Client/GetPlayerStatisticVersions",
+        return $this->make_rest_call(endpoint: "https://$this->titleId.playfabapi.com/Client/GetPlayerStatisticVersions",
             postFields: $postFields);
     }
 
@@ -1023,7 +1036,7 @@ class Macaw extends Nestbox
         if ($statisticNameVersions) $postFields["StatisticNameVersions"] = $statisticNameVersions;
         if ($statisticNames) $postFields["StatisticNames"] = $statisticNames;
 
-        return $this->make_rest_call(endpoint: "https://titleId.playfabapi.com/Client/GetPlayerStatistics",
+        return $this->make_rest_call(endpoint: "https://$this->titleId.playfabapi.com/Client/GetPlayerStatistics",
             postFields: $postFields);
     }
 
@@ -1045,7 +1058,7 @@ class Macaw extends Nestbox
         if ($keys) $postFields["Keys"] = $keys;
         if ($playFabId) $postFields["PlayFabId"] = $playFabId;
 
-        return $this->make_rest_call(endpoint: "https://titleId.playfabapi.com/Client/GetUserData",
+        return $this->make_rest_call(endpoint: "https://$this->titleId.playfabapi.com/Client/GetUserData",
             postFields: $postFields);
     }
 
@@ -1064,7 +1077,7 @@ class Macaw extends Nestbox
         if ($keys) $postFields["Keys"] = $keys;
         if ($playFabId) $postFields["PlayFabId"] = $playFabId;
 
-        return $this->make_rest_call(endpoint: "https://titleId.playfabapi.com/Client/GetUserPublisherData",
+        return $this->make_rest_call(endpoint: "https://$this->titleId.playfabapi.com/Client/GetUserPublisherData",
             postFields: $postFields);
     }
 
@@ -1087,7 +1100,7 @@ class Macaw extends Nestbox
         if ($keys) $postFields["Keys"] = $keys;
         if ($playFabId) $postFields["PlayFabId"] = $playFabId;
 
-        return $this->make_rest_call(endpoint: "https://titleId.playfabapi.com/Client/GetUserPublisherReadOnlyData",
+        return $this->make_rest_call(endpoint: "https://$this->titleId.playfabapi.com/Client/GetUserPublisherReadOnlyData",
             postFields: $postFields);
     }
 
@@ -1110,7 +1123,7 @@ class Macaw extends Nestbox
         if ($keys) $postFields["Keys"] = $keys;
         if ($playFabId) $postFields["PlayFabId"] = $playFabId;
 
-        return $this->make_rest_call(endpoint: "https://titleId.playfabapi.com/Client/GetUserReadOnlyData",
+        return $this->make_rest_call(endpoint: "https://$this->titleId.playfabapi.com/Client/GetUserReadOnlyData",
             postFields: $postFields);
     }
 
@@ -1128,7 +1141,7 @@ class Macaw extends Nestbox
         $postFields = ["Statistics" => $statistics];
         if ($customTags) $postFields["CustomTags"] = $customTags;
 
-        return $this->make_rest_call(endpoint: "https://titleId.playfabapi.com/Client/UpdatePlayerStatistics",
+        return $this->make_rest_call(endpoint: "https://$this->titleId.playfabapi.com/Client/UpdatePlayerStatistics",
             postFields: $postFields);
     }
 
@@ -1154,7 +1167,7 @@ class Macaw extends Nestbox
         if ($keysToRemove) $postFields["KeysToRemove"] = $keysToRemove;
         if ($isPublic) $postFields["Permission"] = "public";
 
-        return $this->make_rest_call(endpoint: "https://titleId.playfabapi.com/Client/UpdateUserData",
+        return $this->make_rest_call(endpoint: "https://$this->titleId.playfabapi.com/Client/UpdateUserData",
             postFields: $postFields);
     }
 
@@ -1180,7 +1193,7 @@ class Macaw extends Nestbox
         if ($keysToRemove) $postFields["KeysToRemove"] = $keysToRemove;
         if ($isPublic) $postFields["Permission"] = "public";
 
-        return $this->make_rest_call(endpoint: "https://titleId.playfabapi.com/Client/UpdateUserPublisherData",
+        return $this->make_rest_call(endpoint: "https://$this->titleId.playfabapi.com/Client/UpdateUserPublisherData",
             postFields: $postFields);
     }
 
@@ -1340,7 +1353,7 @@ class Macaw extends Nestbox
             "SharedGroupId" => $sharedGroupId
         ];
 
-        return $this->make_rest_call(endpoint: "https://titleId.playfabapi.com/Client/AddSharedGroupMembers",
+        return $this->make_rest_call(endpoint: "https://$this->titleId.playfabapi.com/Client/AddSharedGroupMembers",
             postFields: $postFields);
     }
 
@@ -1357,7 +1370,7 @@ class Macaw extends Nestbox
         $postFields = [];
         if ($sharedGroupId) $postFields["SharedGroupId"] = $sharedGroupId;
 
-        return $this->make_rest_call(endpoint: "https://titleId.playfabapi.com/Client/CreateSharedGroup",
+        return $this->make_rest_call(endpoint: "https://$this->titleId.playfabapi.com/Client/CreateSharedGroup",
             postFields: $postFields);
     }
 
@@ -1380,7 +1393,7 @@ class Macaw extends Nestbox
         ];
         if ($keys) $postFields["Keys"] = $keys;
 
-        return $this->make_rest_call(endpoint: "https://titleId.playfabapi.com/Client/GetSharedGroupData",
+        return $this->make_rest_call(endpoint: "https://$this->titleId.playfabapi.com/Client/GetSharedGroupData",
             postFields: $postFields);
     }
 
@@ -1401,7 +1414,7 @@ class Macaw extends Nestbox
             "SharedGroupId" => $sharedGroupId
         ];
 
-        return $this->make_rest_call(endpoint: "https://titleId.playfabapi.com/Client/RemoveSharedGroupMembers",
+        return $this->make_rest_call(endpoint: "https://$this->titleId.playfabapi.com/Client/RemoveSharedGroupMembers",
             postFields: $postFields);
     }
 
@@ -1430,7 +1443,7 @@ class Macaw extends Nestbox
         if ($keysToRemove) $postFields["Keys"] = $keysToRemove;
         if ($isPublic) $postFields["Permission"] = $permission();
 
-        return $this->make_rest_call(endpoint: "https://titleId.playfabapi.com/Client/UpdateSharedGroupData",
+        return $this->make_rest_call(endpoint: "https://$this->titleId.playfabapi.com/Client/UpdateSharedGroupData",
             postFields: $postFields);
     }
 
@@ -1460,7 +1473,7 @@ class Macaw extends Nestbox
         $postFields = [];
         if ($catalogVersion !== null) $postFields["CatalogVersion"] = $catalogVersion;
 
-        return $this->make_rest_call(endpoint: "https://titleId.playfabapi.com/Client/GetCatalogItems",
+        return $this->make_rest_call(endpoint: "https://$this->titleId.playfabapi.com/Client/GetCatalogItems",
             postFields: $postFields);
     }
 
@@ -1475,7 +1488,7 @@ class Macaw extends Nestbox
         $postFields = [];
         if ($keys !== null) $postFields["Keys"] = $keys;
 
-        return $this->make_rest_call(endpoint: "https://titleId.playfabapi.com/Client/GetPublisherData",
+        return $this->make_rest_call(endpoint: "https://$this->titleId.playfabapi.com/Client/GetPublisherData",
             postFields: $postFields);
     }
 
@@ -1494,7 +1507,7 @@ class Macaw extends Nestbox
             "CatalogVersion" => $catalogVersion
         ];
 
-        return $this->make_rest_call(endpoint: "https://titleId.playfabapi.com/Client/GetStoreItems",
+        return $this->make_rest_call(endpoint: "https://$this->titleId.playfabapi.com/Client/GetStoreItems",
             postFields: $postFields);
     }
 
@@ -1505,7 +1518,7 @@ class Macaw extends Nestbox
      */
     public function get_time(): array
     {
-        return $this->make_rest_call(endpoint: "https://titleId.playfabapi.com/Client/GetTime");
+        return $this->make_rest_call(endpoint: "https://$this->titleId.playfabapi.com/Client/GetTime");
     }
 
     /**
@@ -1523,7 +1536,7 @@ class Macaw extends Nestbox
             "OverrideLabel" => $overrideLabel
         ];
 
-        return $this->make_rest_call(endpoint: "https://titleId.playfabapi.com/Client/GetTitleData",
+        return $this->make_rest_call(endpoint: "https://$this->titleId.playfabapi.com/Client/GetTitleData",
             postFields: $postFields);
     }
 
@@ -1537,8 +1550,24 @@ class Macaw extends Nestbox
     {
         $postFields = ["Count" => $count];
 
-        return $this->make_rest_call(endpoint: "https://titleId.playfabapi.com/Client/GetTitleNews",
+        $data = $this->make_rest_call(endpoint: "https://$this->titleId.playfabapi.com/Client/GetTitleNews",
             postFields: $postFields);
+
+        if (200 != $data["code"]) return [];
+
+        $rowData = [];
+        foreach ($data["data"]["News"] as $news) {
+            $rowData[] = [
+                "news_id" => $news["NewsId"],
+                "timestamp" => trim(preg_replace("/[TZ]/i", " ", $news["Timestamp"])),
+                "news_title" => $news["NewsTitle"],
+                "news_body" => $news["Body"]
+            ];
+        }
+
+        if ($rowData && !$this->insert("macaw_title_news", $rowData)) return [];
+
+        return $rowData;
     }
 
 
