@@ -3,11 +3,12 @@
   "description": "An interface for the Microsoft PlayFab REST API.",
   "type": "library",
   "require": {
-    "nestboxphp/nestbox": "^0.0.3",
+    "nestboxphp/nestbox": ">=v0.0.1",
     "ext-curl": "*"
   },
   "require-dev": {
-    "nestboxphp/nestbox": "^0.0.3"
+    "nestboxphp/nestbox": ">=v0.0.1",
+    "ext-curl": "*"
   },
   "license": "AGPL-3.0",
   "autoload": {
