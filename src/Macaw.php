@@ -4,9 +4,8 @@ declare(strict_types=1);
 
 namespace NestboxPHP\Macaw;
 
-use Couchbase\IndexFailureException;
-use NestboxPHP\Macaw\Exception\MacawException;
 use NestboxPHP\Nestbox\Nestbox;
+use NestboxPHP\Macaw\Exception\MacawException;
 
 class Macaw extends Nestbox
 {
