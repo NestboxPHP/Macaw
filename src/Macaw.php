@@ -83,7 +83,6 @@ class Macaw extends Nestbox
                     `body` TEXT , -- maximum 10kb playfab content
                     PRIMARY KEY ( `news_id` )
                 ) ENGINE = InnoDB DEFAULT CHARSET=UTF8MB4 COLLATE=utf8mb4_general_ci;";
-        var_dump("creating table `macaw_title_news`");
         return $this->query_execute($sql);
     }
 
@@ -1707,6 +1706,30 @@ class Macaw extends Nestbox
         return $this->make_rest_call(endpoint: "https://$this->titleId.playfabapi.com/Client/OpenTrade",
             postFields: $postFields);
     }
+
+
+
+    /**
+     * Settings
+     *  ____       _   _   _
+     * / ___|  ___| |_| |_(_)_ __   __ _ ___
+     * \___ \ / _ \ __| __| | '_ \ / _` / __|
+     *  ___) |  __/ |_| |_| | | | | (_| \__ \
+     * |____/ \___|\__|\__|_|_| |_|\__, |___/
+     *                             |___/
+     */
+
+
+    public function load_settings(string $package = null): array
+    {
+        return parent::load_settings(Macaw::PACKAGE_NAME);
+    }
+
+    public function save_settings(string $package = null): int|bool
+    {
+        return parent::save_settings(Macaw::PACKAGE_NAME);
+    }
+
 
     /**
      * Input Validation
