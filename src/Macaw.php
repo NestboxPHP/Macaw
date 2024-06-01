@@ -1813,7 +1813,7 @@ class Macaw extends Nestbox
 
         $hours = $this->hours_since_last_api_call_to_endpoint(endpoint: $endpoint, statusCode: "200");
 
-        if ($this->macawStaleHoursTitleData < $hours) {
+        if ($this->macawStaleHoursTitleData < $hours and $this->macawAutoRefresh) {
             $postFields = [
                 "Keys" => $keys,
                 "OverrideLabel" => $overrideLabel
@@ -1839,9 +1839,9 @@ class Macaw extends Nestbox
         $endpoint = "/Client/GetTitleNews";
         $postFields = ["Count" => $count];
 
-        $hoursSinceLastCall = $this->hours_since_last_api_call_to_endpoint($endpoint);
+        $hours = $this->hours_since_last_api_call_to_endpoint(endpoint: $endpoint, statusCode: "200");
 
-        if ($this->macawStaleHoursNews < $hoursSinceLastCall) {
+        if ($this->macawStaleHoursNews < $hours and $this->macawAutoRefresh) {
             $data = $this->make_rest_call(
                 endpoint: "https://$this->titleId.playfabapi.com/Client/GetTitleNews",
                 postFields: $postFields
