@@ -15,7 +15,6 @@ class Macaw extends Nestbox
 {
     final public const PACKAGE_NAME = 'macaw';
     public const MACAW_LOG_TABLE = 'macaw_api_calls';
-    public const MACAW_INGEST_DIRECTORY = Nestbox::NESTBOX_DIRECTORY . '/macaw';
 
     public int $macawStaleHoursNews = 1;
     public int $macawStaleHoursTitleData = 1;
@@ -23,6 +22,7 @@ class Macaw extends Nestbox
     public int $macawStaleHoursLeaderboard = 24;
     public int $macawClient2MinLimit = 1000;
     public int $macawServer2MinLimit = 12000;
+    public bool $macawAutoRefresh = false;
     public string $macawSessionKey = 'playfab';
 
     protected string $loginMethod = "login_with_email_address";
@@ -132,7 +132,7 @@ class Macaw extends Nestbox
             $headers[] = "Content-Type: application/json";
         }
         if ($useSessionTicket) {
-            $headers[] = "X-Authorization: " . $_SESSION[$this->macawSessionKey]["data"]->SessionTicket ?? "";
+            $headers[] = "X-Authorization: " . $_SESSION[$this->macawSessionKey]["authentication"]->SessionTicket ?? "";
         }
 
         $params = $this->compile_url_params($params);
@@ -167,6 +167,7 @@ class Macaw extends Nestbox
         $this->log_api_call(endpoint: $endpoint, statusCode: $response->code ?? 0);
 
         if (200 != $response->code) {
+            var_dump($response);
             throw new ApiException($response);
         }
 
@@ -217,6 +218,12 @@ class Macaw extends Nestbox
         return $this->insert(static::MACAW_LOG_TABLE, $row);
     }
 
+    /**
+     * Gets the API hourly usage from now to `$hoursAgo` grouped by hour
+     *
+     * @param int $hoursAgo
+     * @return array
+     */
     public function get_api_call_hourly_usage(int $hoursAgo = 168): array
     {
         $sql = "SELECT
@@ -284,24 +291,42 @@ class Macaw extends Nestbox
     }
 
 
-
-    public function last_endpoint_call(string $endpoint): string
+    public function last_endpoint_call(string $endpoint, string $statusCode = null): string
     {
+        $statusCode = ($statusCode) ?: "%";
         $sql = "SELECT `call_time` FROM `macaw_api_calls`
-               WHERE `call_endpoint` LIKE :call_endpoint
-               ORDER BY `call_time` DESC LIMIT 1;";
-        if (!$this->query_execute($sql, ["call_endpoint" => "$endpoint%"])) return "";
+                WHERE
+                    `call_endpoint` LIKE :call_endpoint
+                    AND `status_code` LIKE :status_code
+                ORDER BY `call_time` DESC LIMIT 1;";
+
+        $params = [
+            "call_endpoint" => "$endpoint%",
+            "status_code" => $statusCode
+        ];
+
+        if (!$this->query_execute($sql, $params)) return "";
         if (!$results = $this->fetch_first_result()) return "";
         return $results["call_time"];
     }
 
 
-    public function hours_since_last_api_call_to_endpoint(string $endpoint): int
+    public function hours_since_last_api_call_to_endpoint(string $endpoint, string $statusCode = null): int
     {
-        $sql = "SELECT TIMESTAMPDIFF(HOUR, `call_time`, NOW()) AS 'hours_since_last_call' FROM `macaw_api_calls`
-                WHERE `call_endpoint` LIKE :call_endpoint 
+        $statusCode = ($statusCode) ?: "%";
+        $sql = "SELECT TIMESTAMPDIFF(HOUR, `call_time`, NOW()) AS 'hours_since_last_call'
+                FROM `macaw_api_calls`
+                WHERE
+                    `call_endpoint` LIKE :call_endpoint
+                    AND `status_code` LIKE :status_code
                 ORDER BY `hours_since_last_call` ASC LIMIT 1;";
-        if (!$this->query_execute($sql, ["call_endpoint" => "$endpoint%"])) return 0;
+
+        $params = [
+            "call_endpoint" => "$endpoint%",
+            "status_code" => $statusCode
+        ];
+
+        if (!$this->query_execute($sql, $params)) return 0;
 
         $results = $this->fetch_first_result();
         if (!$results) return 0;
@@ -329,26 +354,23 @@ class Macaw extends Nestbox
      *                                   |___/
      */
 
+
     protected function ingest_data(stdClass $data, string $tablePrefix): void
     {
         // parse table structure
         $structure = $this->parse_table_structure($data, $tablePrefix);
 
         // create tables
-        $this->create_table_from_structure($structure);
-
-        // create queue directory
-        $this->create_document_root_relative_directory(path: static::MACAW_INGEST_DIRECTORY, permissions: 0666);
-
-        // split data object into different jsons
-        $jsons = $this->convert_data_to_json($data);
+        if (!$this->create_table_from_structure($structure))
+            throw new MacawException("Failed to create title_data table.");
 
         // save json contents to queue directory
-        foreach ($jsons as $tableName => $json) {
-            $this->save_import_json_in_queue_directory(filename: $tableName, data: $json);
+        foreach ($this->compile_table_data_from_object($data, $tablePrefix) as $tableName => $tableRows) {
+            $this->save_json_to_ingest_directory([$tableName => $tableRows]);
         }
 
-        // import json tables based on script run time and delete the json upon successful insert
+        // process ingest queue according to time
+        $this->process_ingest_queue();
     }
 
     /**
@@ -381,7 +403,7 @@ class Macaw extends Nestbox
     }
 
 
-    protected function create_table_from_structure(array $structure): true
+    protected function create_table_from_structure(array $structure, bool $dropTable = true): true
     {
         foreach ($structure as $tableName => $columns) {
             // table creation
@@ -405,14 +427,7 @@ class Macaw extends Nestbox
     }
 
 
-    protected function convert_data_to_json(stdClass $data): array
-    {
-        $array = [];
-        return $array;
-    }
-
-
-    protected function save_import_json_in_queue_directory(string $filename, stdClass|array|string $data): true
+    protected function deprecated_save_import_json_in_queue_directory(string $filename, stdClass|array|string $data): true
     {
         if (!str_ends_with(haystack: $filename, needle: ".json")) $filename .= ".json";
         $fullpath = $this->generate_document_root_relative_path([static::MACAW_INGEST_DIRECTORY, $filename]);
@@ -421,7 +436,7 @@ class Macaw extends Nestbox
     }
 
 
-    public function insert_table_data(stdClass $data, string $tablePrefix): int
+    public function deprecated_insert_table_data(stdClass $data, string $tablePrefix): int
     {
         set_time_limit(300);
 
@@ -621,13 +636,13 @@ class Macaw extends Nestbox
         if ($customTags) $postFields["CustomTags"] = $customTags;
         if ($infoRequestParameters) $postFields["InfoRequestParameters"] = $infoRequestParameters;
 
-        $response = $this->make_rest_call(endpoint: "https://$this->titleId.playfabapi.com/Client/LoginWithEmailAddress",
-            postFields: $postFields, useSessionTicket: false);
+        $response = $this->make_rest_call(
+            endpoint: "https://$this->titleId.playfabapi.com/Client/LoginWithEmailAddress",
+            postFields: $postFields,
+            useSessionTicket: false
+        );
 
-        if (200 != $response->code)
-            throw new MacawException("Failed to authenticate.");
-
-        $_SESSION[$this->macawSessionKey]["data"] = $response->data;
+        $_SESSION[$this->macawSessionKey]["authentication"] = $response;
 
         return $response;
     }
@@ -1734,11 +1749,9 @@ class Macaw extends Nestbox
             $catalogKeys = [];
             foreach ($items as $item) {
                 $catalogKeys += array_keys(get_object_vars($item));
-                var_dump($item);
                 die;
             }
             $catalogKeys = array_unique($catalogKeys);
-            var_dump($catalogKeys);
         }
     }
 
@@ -1794,25 +1807,25 @@ class Macaw extends Nestbox
      * when used by the game client; otherwise, the overrides are applied automatically to the title data.
      * @return array
      */
-    public function get_title_data(array $keys = null, string $overrideLabel = null): stdClass
+    public function get_title_data(array $keys = null, string $overrideLabel = null): array
     {
-        $hours = $this->hours_since_last_api_call_to_endpoint("/Client/GetTitleData");
+        $endpoint = "/Client/GetTitleData";
+
+        $hours = $this->hours_since_last_api_call_to_endpoint(endpoint: $endpoint, statusCode: "200");
 
         if ($this->macawStaleHoursTitleData < $hours) {
-            var_dump("recall /Client/GetTitleData");
+            $postFields = [
+                "Keys" => $keys,
+                "OverrideLabel" => $overrideLabel
+            ];
+
+            $response = $this->make_rest_call(endpoint: "https://$this->titleId.playfabapi.com{$endpoint}",
+                postFields: $postFields);
+
+            $this->ingest_data($response->Data, tablePrefix: "macaw_title_data_");
         }
 
-        $postFields = [
-            "Keys" => $keys,
-            "OverrideLabel" => $overrideLabel
-        ];
-
-        $response = $this->make_rest_call(endpoint: "https://$this->titleId.playfabapi.com/Client/GetTitleData",
-            postFields: $postFields);
-
-        $this->insert_table_data($response->Data, "macaw_title_data_");
-
-        return $response->Data;
+        return [];
     }
 
     /**
@@ -1823,28 +1836,33 @@ class Macaw extends Nestbox
      */
     public function get_title_news(int $count = 10): array
     {
+        $endpoint = "/Client/GetTitleNews";
         $postFields = ["Count" => $count];
 
-        $hoursSinceLastCall = $this->hours_since_last_api_call_to_endpoint("/Client/GetTitleNews");
+        $hoursSinceLastCall = $this->hours_since_last_api_call_to_endpoint($endpoint);
 
-        $data = $this->make_rest_call(endpoint: "https://$this->titleId.playfabapi.com/Client/GetTitleNews",
-            postFields: $postFields);
+        if ($this->macawStaleHoursNews < $hoursSinceLastCall) {
+            $data = $this->make_rest_call(
+                endpoint: "https://$this->titleId.playfabapi.com/Client/GetTitleNews",
+                postFields: $postFields
+            );
 
-        if (200 != $data->code) return [];
+            $rowData = [];
+            foreach ($data->News as $news) {
+                $rowData[] = [
+                    "news_id" => $news->NewsId,
+                    "timestamp" => trim(preg_replace("/[TZ]/i", " ", $news->Timestamp)),
+                    "title" => $news->Title,
+                    "body" => $news->Body
+                ];
+            }
 
-        $rowData = [];
-        foreach ($data->data->News as $news) {
-            $rowData[] = [
-                "news_id" => $news->NewsId,
-                "timestamp" => trim(preg_replace("/[TZ]/i", " ", $news->Timestamp)),
-                "title" => $news->Title,
-                "body" => $news->Body
-            ];
+            if ($rowData) {
+                $this->insert("macaw_title_news", $rowData);
+            }
         }
 
-        if (!$rowData && !$this->insert("macaw_title_news", $rowData)) return [];
-
-        return $rowData;
+        return $this->select("macaw_title_news", orderBy: ["timestamp" => "DESC"], limit: 0);
     }
 
 
